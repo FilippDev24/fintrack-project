@@ -15,7 +15,6 @@ const createForecast = async (req, res) => {
   const { date, amount, category, description, type } = req.body;
 
   try {
-    // Найти категорию по умолчанию для прогнозов, если категория не указана
     let defaultCategory = null;
     if (!category) {
       defaultCategory = await Category.findOne({ isSystem: true, defaultFor: 'forecast' });
@@ -25,7 +24,7 @@ const createForecast = async (req, res) => {
       date,
       amount,
       category: category || (defaultCategory ? defaultCategory._id : null),
-      description,
+      description: description || '',
       type,
     });
 
@@ -40,7 +39,6 @@ const updateForecast = async (req, res) => {
   try {
     const { date, amount, category, description, type } = req.body;
     
-    // Найти категорию по умолчанию для прогнозов, если категория не указана
     let defaultCategory = null;
     if (!category) {
       defaultCategory = await Category.findOne({ isSystem: true, defaultFor: 'forecast' });
@@ -48,7 +46,7 @@ const updateForecast = async (req, res) => {
 
     const updatedForecast = await Forecast.findByIdAndUpdate(
       req.params.id,
-      { date, amount, category: category || (defaultCategory ? defaultCategory._id : null), description, type },
+      { date, amount, category: category || (defaultCategory ? defaultCategory._id : null), description: description || '', type },
       { new: true }
     );
     res.json(updatedForecast);
@@ -72,6 +70,16 @@ const acceptForecast = async (req, res) => {
     if (!forecast) {
       return res.status(404).json({ message: 'Forecast not found' });
     }
+
+    const forecastDate = new Date(forecast.date);
+    const currentDate = new Date();
+    forecastDate.setHours(0, 0, 0, 0);
+    currentDate.setHours(0, 0, 0, 0);
+
+    if (forecastDate > currentDate) {
+      return res.status(400).json({ message: 'Cannot accept forecast for a future date.' });
+    }
+
     forecast.status = 'accepted';
     await forecast.save();
     const transaction = new Transaction({

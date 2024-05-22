@@ -15,6 +15,8 @@ exports.createTransaction = async (req, res) => {
   try {
     const transactionDate = new Date(date);
     const currentDate = new Date();
+    transactionDate.setHours(0, 0, 0, 0);
+    currentDate.setHours(0, 0, 0, 0);
     if (transactionDate > currentDate) {
       return res.status(400).json({ message: 'Date cannot be in the future.' });
     }
@@ -23,7 +25,7 @@ exports.createTransaction = async (req, res) => {
       date: transactionDate,
       amount,
       category,
-      description,
+      description: description || '',
       type,
     });
 
@@ -63,20 +65,13 @@ exports.updateTransaction = async (req, res) => {
 
 exports.deleteTransaction = async (req, res) => {
   const { id } = req.params;
-  console.log(`Attempting to delete transaction with id: ${id}`);
-
   try {
     const transaction = await Transaction.findById(id);
-    if (!transaction) {
-      console.log('Transaction not found');
-      return res.status(404).json({ message: 'Transaction not found' });
-    }
+    if (!transaction) return res.status(404).json({ message: 'Transaction not found' });
 
-    await Transaction.deleteOne({ _id: id });
-    console.log('Transaction successfully deleted');
+    await transaction.remove();
     res.json({ message: 'Transaction deleted' });
   } catch (error) {
-    console.error('Error deleting transaction:', error);
-    res.status(500).json({ message: error.message });
+    res.status(400).json({ message: error.message });
   }
 };

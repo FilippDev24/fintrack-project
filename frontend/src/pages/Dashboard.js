@@ -40,8 +40,8 @@ const Dashboard = () => {
     try {
       const transactionsResponse = await axios.get('http://localhost:5001/api/transactions');
       const forecastsResponse = await axios.get('http://localhost:5001/api/forecasts');
-      setTransactions(transactionsResponse.data);
-      setForecasts(forecastsResponse.data);
+      setTransactions(transactionsResponse.data.map(t => ({ ...t, isForecast: false })));
+      setForecasts(forecastsResponse.data.filter(f => f.status !== 'accepted').map(f => ({ ...f, isForecast: true })));
     } catch (error) {
       console.error('Error fetching operations:', error);
     }
@@ -66,14 +66,22 @@ const Dashboard = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setNewOperation({ ...newOperation, [name]: value });
+    setNewOperation({
+      ...newOperation,
+      [name]: name === 'isForecast' ? (value === 'true') : value
+    });
   };
 
   const addOperation = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('http://localhost:5001/api/transactions', newOperation);
-      setTransactions([...transactions, response.data]);
+      if (newOperation.isForecast) {
+        const response = await axios.post('http://localhost:5001/api/forecasts', newOperation);
+        setForecasts([...forecasts, { ...response.data, isForecast: true }]);
+      } else {
+        const response = await axios.post('http://localhost:5001/api/transactions', newOperation);
+        setTransactions([...transactions, { ...response.data, isForecast: false }]);
+      }
       setNewOperation({
         date: '',
         amount: '',
@@ -107,11 +115,11 @@ const Dashboard = () => {
   const saveChanges = async () => {
     try {
       if (selectedOperation.isForecast) {
-        await axios.put(`http://localhost:5001/api/forecasts/${selectedOperation._id}`, selectedOperation);
-        setForecasts(forecasts.map(f => f._id === selectedOperation._id ? selectedOperation : f));
+        const response = await axios.put(`http://localhost:5001/api/forecasts/${selectedOperation._id}`, selectedOperation);
+        setForecasts(forecasts.map(f => f._id === selectedOperation._id ? { ...response.data, isForecast: true } : f));
       } else {
-        await axios.put(`http://localhost:5001/api/transactions/${selectedOperation._id}`, selectedOperation);
-        setTransactions(transactions.map(t => t._id === selectedOperation._id ? selectedOperation : t));
+        const response = await axios.put(`http://localhost:5001/api/transactions/${selectedOperation._id}`, selectedOperation);
+        setTransactions(transactions.map(t => t._id === selectedOperation._id ? { ...response.data, isForecast: false } : t));
       }
       closeModal();
     } catch (error) {
@@ -136,17 +144,66 @@ const Dashboard = () => {
 
   const acceptForecast = async () => {
     try {
-      await axios.put(`http://localhost:5001/api/forecasts/${selectedOperation._id}/accept`);
-      setForecasts(forecasts.filter(f => f._id !== selectedOperation._id));
+      const forecastDate = new Date(selectedOperation.date);
+      const currentDate = new Date();
+      forecastDate.setHours(0, 0, 0, 0);
+      currentDate.setHours(0, 0, 0, 0);
+
+      if (forecastDate > currentDate) {
+        return alert('Cannot accept forecast for a future date.');
+      }
+
+      await axios.post(`http://localhost:5001/api/forecasts/${selectedOperation._id}/accept`);
+      await fetchOperations(); // Перезапросить операции после принятия прогноза
       closeModal();
     } catch (error) {
       console.error('Error accepting forecast:', error);
     }
   };
 
+  const handleMonthClick = (month) => {
+    setCurrentMonth(month);
+  };
+
+  const monthTabs = (
+    <div className="month-tabs">
+      {months.map((month, index) => (
+        <button
+          key={index}
+          className={index === currentMonth ? 'active' : ''}
+          onClick={() => handleMonthClick(index)}
+        >
+          {month}
+        </button>
+      ))}
+    </div>
+  );
+
+  // Стили для активного таба
+  const styles = `
+    .month-tabs {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+    .month-tabs button {
+      padding: 10px 20px;
+      margin: 0 5px;
+      border: none;
+      background-color: #f1f1f1;
+      cursor: pointer;
+    }
+    .month-tabs button.active {
+      background-color: #007bff;
+      color: #fff;
+    }
+  `;
+
   return (
     <div>
+      <style>{styles}</style>
       <h1>Дэшборд</h1>
+      {monthTabs}
       <form onSubmit={addOperation}>
         <input type="date" name="date" value={newOperation.date} onChange={handleInputChange} required />
         <input type="number" name="amount" value={newOperation.amount} onChange={handleInputChange} required />
@@ -159,6 +216,10 @@ const Dashboard = () => {
         <select name="type" value={newOperation.type} onChange={handleInputChange} required>
           <option value="income">Доход</option>
           <option value="expense">Расход</option>
+        </select>
+        <select name="isForecast" value={newOperation.isForecast} onChange={handleInputChange} required>
+          <option value={false}>Транзакция</option>
+          <option value={true}>Прогноз</option>
         </select>
         <button type="submit">Добавить операцию</button>
       </form>
@@ -175,40 +236,46 @@ const Dashboard = () => {
           <tr>
             {Array.from({ length: getDaysInMonth(currentMonth, currentYear) }, (_, i) => (
               <td key={i}>
-                {combinedOperations.filter(op => new Date(op.date).getDate() === i + 1).reduce((sum, op) => sum + op.amount, 0)}
+                {combinedOperations
+                  .filter(op => {
+                    const opDate = new Date(op.date);
+                    return opDate.getMonth() === currentMonth && opDate.getFullYear() === currentYear && opDate.getDate() === i + 1;
+                  })
+                  .reduce((sum, op) => {
+                    return sum + (op.type === 'income' ? op.amount : -op.amount);
+                  }, 0)}
               </td>
             ))}
           </tr>
           <tr>
             {Array.from({ length: getDaysInMonth(currentMonth, currentYear) }, (_, i) => (
               <td key={i}>
-                {combinedOperations.filter(op => new Date(op.date).getDate() === i + 1 && op.type === 'income').map(op => (
-                  <div key={op._id} onClick={() => openModal(op)}>
-                    {op.amount} {categories.find(category => category._id === op.category)?.name || 'Unknown'} {op.isForecast && '(Прогноз)'}
-                  </div>
-                ))}
+                {combinedOperations
+                  .filter(op => {
+                    const opDate = new Date(op.date);
+                    return opDate.getMonth() === currentMonth && opDate.getFullYear() === currentYear && opDate.getDate() === i + 1 && op.type === 'income';
+                  })
+                  .map(op => (
+                    <div key={op._id} onClick={() => openModal(op)}>
+                      {op.amount} {categories.find(category => category._id === op.category)?.name || 'Unknown'} {op.isForecast && '(Прогноз)'}
+                    </div>
+                  ))}
               </td>
             ))}
           </tr>
           <tr>
             {Array.from({ length: getDaysInMonth(currentMonth, currentYear) }, (_, i) => (
               <td key={i}>
-                {combinedOperations.filter(op => new Date(op.date).getDate() === i + 1 && op.type === 'expense').map(op => (
-                  <div key={op._id} onClick={() => openModal(op)}>
-                    -{op.amount} {categories.find(category => category._id === op.category)?.name || 'Unknown'} {op.isForecast && '(Прогноз)'}
-                  </div>
-                ))}
-              </td>
-            ))}
-          </tr>
-          <tr>
-            {Array.from({ length: getDaysInMonth(currentMonth, currentYear) }, (_, i) => (
-              <td key={i}>
-                {combinedOperations.filter(op => new Date(op.date).getDate() === i + 1 && op.type === 'income').map(op => (
-                  <div key={op._id} onClick={() => openModal(op)}>
-                    {op.amount} {categories.find(category => category._id === op.category)?.name || 'Unknown'} {op.isForecast && '(Прогноз)'}
-                  </div>
-                ))}
+                {combinedOperations
+                  .filter(op => {
+                    const opDate = new Date(op.date);
+                    return opDate.getMonth() === currentMonth && opDate.getFullYear() === currentYear && opDate.getDate() === i + 1 && op.type === 'expense';
+                  })
+                  .map(op => (
+                    <div key={op._id} onClick={() => openModal(op)}>
+                      -{op.amount} {categories.find(category => category._id === op.category)?.name || 'Unknown'} {op.isForecast && '(Прогноз)'}
+                    </div>
+                  ))}
               </td>
             ))}
           </tr>
@@ -245,6 +312,6 @@ const Dashboard = () => {
       </Modal>
     </div>
   );
-}
+};
 
 export default Dashboard;
