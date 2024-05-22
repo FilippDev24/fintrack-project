@@ -1,6 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import React from 'react';
 import Modal from 'react-modal';
+import Calendar from '../components/Calendar';
+import NewOperationForm from '../components/NewOperationForm';
+import MonthSwitcher from '../components/MonthSwitcher';
+import OperationModal from '../components/OperationModal';
+import Notification from '../components/Notification';
+import useOperations from '../hooks/useOperations';
 
 // Настройка модального окна
 Modal.setAppElement('#root');
@@ -15,301 +20,55 @@ const getDaysInMonth = (month, year) => {
 };
 
 const Dashboard = () => {
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-  const [transactions, setTransactions] = useState([]);
-  const [forecasts, setForecasts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [newOperation, setNewOperation] = useState({
-    date: '',
-    amount: '',
-    category: '',
-    description: '',
-    type: 'income',
-    isForecast: false,
-  });
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedOperation, setSelectedOperation] = useState(null);
+  const {
+    state,
+    openModal,
+    closeModal,
+    handleModalInputChange,
+    saveChanges,
+    deleteOperation,
+    acceptForecast,
+    addOperation,
+    handleMonthChange,
+    closeNotification
+  } = useOperations();
 
-  useEffect(() => {
-    fetchOperations();
-    fetchCategories();
-  }, [currentMonth]);
-
-  const fetchOperations = async () => {
-    try {
-      const transactionsResponse = await axios.get('http://localhost:5001/api/transactions');
-      const forecastsResponse = await axios.get('http://localhost:5001/api/forecasts');
-      setTransactions(transactionsResponse.data.map(t => ({ ...t, isForecast: false })));
-      setForecasts(forecastsResponse.data.filter(f => f.status !== 'accepted').map(f => ({ ...f, isForecast: true })));
-    } catch (error) {
-      console.error('Error fetching operations:', error);
-    }
-  };
-
-  const fetchCategories = async () => {
-    try {
-      const response = await axios.get('http://localhost:5001/api/categories');
-      setCategories(response.data);
-
-      const defaultCategory = response.data.find(category => category.isSystem && category.defaultFor === 'transaction');
-      if (defaultCategory) {
-        setNewOperation(prevOperation => ({
-          ...prevOperation,
-          category: defaultCategory._id,
-        }));
-      }
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-    }
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewOperation({
-      ...newOperation,
-      [name]: name === 'isForecast' ? (value === 'true') : value
-    });
-  };
-
-  const addOperation = async (e) => {
-    e.preventDefault();
-    try {
-      if (newOperation.isForecast) {
-        const response = await axios.post('http://localhost:5001/api/forecasts', newOperation);
-        setForecasts([...forecasts, { ...response.data, isForecast: true }]);
-      } else {
-        const response = await axios.post('http://localhost:5001/api/transactions', newOperation);
-        setTransactions([...transactions, { ...response.data, isForecast: false }]);
-      }
-      setNewOperation({
-        date: '',
-        amount: '',
-        category: '',
-        description: '',
-        type: 'income',
-        isForecast: false,
-      });
-    } catch (error) {
-      console.error('Error adding operation:', error);
-    }
-  };
-
-  const combinedOperations = [...transactions, ...forecasts];
-
-  const openModal = (operation) => {
-    setSelectedOperation(operation);
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setSelectedOperation(null);
-  };
-
-  const handleModalInputChange = (e) => {
-    const { name, value } = e.target;
-    setSelectedOperation({ ...selectedOperation, [name]: value });
-  };
-
-  const saveChanges = async () => {
-    try {
-      if (selectedOperation.isForecast) {
-        const response = await axios.put(`http://localhost:5001/api/forecasts/${selectedOperation._id}`, selectedOperation);
-        setForecasts(forecasts.map(f => f._id === selectedOperation._id ? { ...response.data, isForecast: true } : f));
-      } else {
-        const response = await axios.put(`http://localhost:5001/api/transactions/${selectedOperation._id}`, selectedOperation);
-        setTransactions(transactions.map(t => t._id === selectedOperation._id ? { ...response.data, isForecast: false } : t));
-      }
-      closeModal();
-    } catch (error) {
-      console.error('Error saving changes:', error);
-    }
-  };
-
-  const deleteOperation = async () => {
-    try {
-      if (selectedOperation.isForecast) {
-        await axios.delete(`http://localhost:5001/api/forecasts/${selectedOperation._id}`);
-        setForecasts(forecasts.filter(f => f._id !== selectedOperation._id));
-      } else {
-        await axios.delete(`http://localhost:5001/api/transactions/${selectedOperation._id}`);
-        setTransactions(transactions.filter(t => t._id !== selectedOperation._id));
-      }
-      closeModal();
-    } catch (error) {
-      console.error('Error deleting operation:', error);
-    }
-  };
-
-  const acceptForecast = async () => {
-    try {
-      const forecastDate = new Date(selectedOperation.date);
-      const currentDate = new Date();
-      forecastDate.setHours(0, 0, 0, 0);
-      currentDate.setHours(0, 0, 0, 0);
-
-      if (forecastDate > currentDate) {
-        return alert('Cannot accept forecast for a future date.');
-      }
-
-      await axios.post(`http://localhost:5001/api/forecasts/${selectedOperation._id}/accept`);
-      await fetchOperations(); // Перезапросить операции после принятия прогноза
-      closeModal();
-    } catch (error) {
-      console.error('Error accepting forecast:', error);
-    }
-  };
-
-  const handleMonthClick = (month) => {
-    setCurrentMonth(month);
-  };
-
-  const monthTabs = (
-    <div className="month-tabs">
-      {months.map((month, index) => (
-        <button
-          key={index}
-          className={index === currentMonth ? 'active' : ''}
-          onClick={() => handleMonthClick(index)}
-        >
-          {month}
-        </button>
-      ))}
-    </div>
-  );
-
-  // Стили для активного таба
-  const styles = `
-    .month-tabs {
-      display: flex;
-      justify-content: center;
-      margin-bottom: 20px;
-    }
-    .month-tabs button {
-      padding: 10px 20px;
-      margin: 0 5px;
-      border: none;
-      background-color: #f1f1f1;
-      cursor: pointer;
-    }
-    .month-tabs button.active {
-      background-color: #007bff;
-      color: #fff;
-    }
-  `;
+  const daysInMonth = getDaysInMonth(state.currentMonth, state.currentYear);
 
   return (
     <div>
-      <style>{styles}</style>
-      <h1>Дэшборд</h1>
-      {monthTabs}
-      <form onSubmit={addOperation}>
-        <input type="date" name="date" value={newOperation.date} onChange={handleInputChange} required />
-        <input type="number" name="amount" value={newOperation.amount} onChange={handleInputChange} required />
-        <select name="category" value={newOperation.category} onChange={handleInputChange} required>
-          {categories.map(category => (
-            <option key={category._id} value={category._id}>{category.name}</option>
-          ))}
-        </select>
-        <input type="text" name="description" value={newOperation.description} onChange={handleInputChange} />
-        <select name="type" value={newOperation.type} onChange={handleInputChange} required>
-          <option value="income">Доход</option>
-          <option value="expense">Расход</option>
-        </select>
-        <select name="isForecast" value={newOperation.isForecast} onChange={handleInputChange} required>
-          <option value={false}>Транзакция</option>
-          <option value={true}>Прогноз</option>
-        </select>
-        <button type="submit">Добавить операцию</button>
-      </form>
-      <h2>Операции</h2>
-      <table>
-        <thead>
-          <tr>
-            {Array.from({ length: getDaysInMonth(currentMonth, currentYear) }, (_, i) => (
-              <th key={i}>{i + 1}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            {Array.from({ length: getDaysInMonth(currentMonth, currentYear) }, (_, i) => (
-              <td key={i}>
-                {combinedOperations
-                  .filter(op => {
-                    const opDate = new Date(op.date);
-                    return opDate.getMonth() === currentMonth && opDate.getFullYear() === currentYear && opDate.getDate() === i + 1;
-                  })
-                  .reduce((sum, op) => {
-                    return sum + (op.type === 'income' ? op.amount : -op.amount);
-                  }, 0)}
-              </td>
-            ))}
-          </tr>
-          <tr>
-            {Array.from({ length: getDaysInMonth(currentMonth, currentYear) }, (_, i) => (
-              <td key={i}>
-                {combinedOperations
-                  .filter(op => {
-                    const opDate = new Date(op.date);
-                    return opDate.getMonth() === currentMonth && opDate.getFullYear() === currentYear && opDate.getDate() === i + 1 && op.type === 'income';
-                  })
-                  .map(op => (
-                    <div key={op._id} onClick={() => openModal(op)}>
-                      {op.amount} {categories.find(category => category._id === op.category)?.name || 'Unknown'} {op.isForecast && '(Прогноз)'}
-                    </div>
-                  ))}
-              </td>
-            ))}
-          </tr>
-          <tr>
-            {Array.from({ length: getDaysInMonth(currentMonth, currentYear) }, (_, i) => (
-              <td key={i}>
-                {combinedOperations
-                  .filter(op => {
-                    const opDate = new Date(op.date);
-                    return opDate.getMonth() === currentMonth && opDate.getFullYear() === currentYear && opDate.getDate() === i + 1 && op.type === 'expense';
-                  })
-                  .map(op => (
-                    <div key={op._id} onClick={() => openModal(op)}>
-                      -{op.amount} {categories.find(category => category._id === op.category)?.name || 'Unknown'} {op.isForecast && '(Прогноз)'}
-                    </div>
-                  ))}
-              </td>
-            ))}
-          </tr>
-        </tbody>
-      </table>
-      <Modal
-        isOpen={isModalOpen}
-        onRequestClose={closeModal}
-        contentLabel="Редактировать операцию"
-      >
-        {selectedOperation && (
-          <div>
-            <h2>Редактировать операцию</h2>
-            <input type="date" name="date" value={selectedOperation.date} onChange={handleModalInputChange} required />
-            <input type="number" name="amount" value={selectedOperation.amount} onChange={handleModalInputChange} required />
-            <select name="category" value={selectedOperation.category} onChange={handleModalInputChange} required>
-              {categories.map(category => (
-                <option key={category._id} value={category._id}>{category.name}</option>
-              ))}
-            </select>
-            <input type="text" name="description" value={selectedOperation.description} onChange={handleModalInputChange} />
-            <select name="type" value={selectedOperation.type} onChange={handleModalInputChange} required>
-              <option value="income">Доход</option>
-              <option value="expense">Расход</option>
-            </select>
-            <button onClick={saveChanges}>Сохранить</button>
-            <button onClick={deleteOperation}>Удалить</button>
-            {selectedOperation.isForecast && (
-              <button onClick={acceptForecast}>Принять</button>
-            )}
-            <button onClick={closeModal}>Закрыть</button>
-          </div>
-        )}
-      </Modal>
+      <h1>Dashboard</h1>
+      <MonthSwitcher
+        currentMonth={state.currentMonth}
+        currentYear={state.currentYear}
+        months={months}
+        handleMonthChange={handleMonthChange}
+      />
+      <NewOperationForm categories={state.categories} addOperation={addOperation} />
+      <Calendar
+        currentMonth={state.currentMonth}
+        currentYear={state.currentYear}
+        daysInMonth={daysInMonth}
+        transactions={state.transactions}
+        forecasts={state.forecasts}
+        categories={state.categories}
+        openModal={openModal}
+      />
+      <OperationModal
+        isModalOpen={state.isModalOpen}
+        selectedOperation={state.selectedOperation}
+        categories={state.categories}
+        handleModalInputChange={handleModalInputChange}
+        saveChanges={saveChanges}
+        deleteOperation={deleteOperation}
+        acceptForecast={acceptForecast}
+        closeModal={closeModal}
+      />
+      <Notification
+        message={state.notification?.message}
+        type={state.notification?.type}
+        onClose={closeNotification}
+      />
     </div>
   );
 };

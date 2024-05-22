@@ -1,91 +1,73 @@
-// backend/controllers/userController.js
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { validationResult } = require('express-validator');
+const { generateToken, hashPassword, comparePasswords } = require('../utils/authUtils');
+const { handleError } = require('../utils/errorUtils');
 
-const getUsers = async (req, res) => {
-  try {
-    const users = await User.find();
-    res.json(users);
-  } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-const createUser = async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
-
-  const { name, email, password, role } = req.body;
-
-  try {
-    let user = await User.findOne({ email });
-    if (user) {
-      return res.status(400).json({ msg: 'User already exists' });
-    }
-
-    user = new User({ name, email, password, role });
-
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(password, salt);
-
-    await user.save();
-
-    res.status(201).json(user);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-const loginUser = async (req, res) => {
-    console.log('loginUser function hit');
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      console.log('Validation errors:', errors.array());
-      return res.status(400).json({ errors: errors.array() });
-    }
-  
-    const { email, password } = req.body;
-    console.log('Email:', email, 'Password:', password);
-  
+exports.register = async (req, res) => {
     try {
-      let user = await User.findOne({ email });
-      if (!user) {
-        console.log('Invalid credentials: user not found');
-        return res.status(400).json({ msg: 'Invalid credentials' });
-      }
-  
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) {
-        console.log('Invalid credentials: password mismatch');
-        return res.status(400).json({ msg: 'Invalid credentials' });
-      }
-  
-      const payload = {
-        user: {
-          id: user.id,
-          role: user.role,
-        },
-      };
-  
-      jwt.sign(
-        payload,
-        process.env.JWT_SECRET,
-        { expiresIn: '1h' },
-        (err, token) => {
-          if (err) throw err;
-          res.json({ token });
-        }
-      );
-    } catch (err) {
-      console.error(err.message);
-      res.status(500).json({ message: 'Server error' });
+        const hashedPassword = await hashPassword(req.body.password);
+        const user = new User({ ...req.body, password: hashedPassword });
+        await user.save();
+        const token = generateToken(user._id);
+        res.status(201).json({ user, token });
+    } catch (error) {
+        handleError(res, error);
     }
-  };
+};
 
-module.exports = { getUsers, createUser, loginUser };
+exports.login = async (req, res) => {
+    try {
+        const user = await User.findOne({ email: req.body.email });
+        if (!user || !await comparePasswords(req.body.password, user.password)) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+        const token = generateToken(user._id);
+        res.status(200).json({ user, token });
+    } catch (error) {
+        handleError(res, error);
+    }
+};
+
+exports.getProfile = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select('-password');
+        res.status(200).json(user);
+    } catch (error) {
+        handleError(res, error);
+    }
+};
+
+// Добавление новых функций
+exports.getUsers = async (req, res) => {
+    try {
+        const users = await User.find().select('-password');
+        res.status(200).json(users);
+    } catch (error) {
+        handleError(res, error);
+    }
+};
+
+exports.createUser = async (req, res) => {
+    try {
+        const hashedPassword = await hashPassword(req.body.password);
+        const user = new User({ ...req.body, password: hashedPassword });
+        await user.save();
+        res.status(201).json(user);
+    } catch (error) {
+        handleError(res, error);
+    }
+};
+
+exports.loginUser = async (req, res) => {
+    try {
+        const user = await User.findOne({ email: req.body.email });
+        if (!user || !await comparePasswords(req.body.password, user.password)) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+        const token = generateToken(user._id);
+        res.status(200).json({ user, token });
+    } catch (error) {
+        handleError(res, error);
+    }
+};
