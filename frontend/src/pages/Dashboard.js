@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import Modal from 'react-modal';
+
+// Настройка модального окна
+Modal.setAppElement('#root');
 
 const months = [
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
@@ -24,6 +28,8 @@ const Dashboard = () => {
     type: 'income',
     isForecast: false,
   });
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedOperation, setSelectedOperation] = useState(null);
 
   useEffect(() => {
     fetchOperations();
@@ -60,151 +66,101 @@ const Dashboard = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setNewOperation({
-      ...newOperation,
-      [name]: value,
-    });
+    setNewOperation({ ...newOperation, [name]: value });
   };
 
-  const handleSubmit = async (e) => {
+  const addOperation = async (e) => {
     e.preventDefault();
-
-    const operationDate = new Date(newOperation.date);
-    const currentDate = new Date();
-    if (operationDate > currentDate && !newOperation.isForecast) {
-      alert('Date cannot be in the future for a transaction.');
-      return;
-    }
-
     try {
-      const endpoint = newOperation.isForecast ? 'http://localhost:5001/api/forecasts' : 'http://localhost:5001/api/transactions';
-      const response = await axios.post(endpoint, newOperation);
-
-      if (newOperation.isForecast) {
-        setForecasts([...forecasts, response.data]);
-      } else {
-        setTransactions([...transactions, response.data]);
-      }
-
+      const response = await axios.post('http://localhost:5001/api/transactions', newOperation);
+      setTransactions([...transactions, response.data]);
       setNewOperation({
         date: '',
         amount: '',
-        category: categories.find(category => category.isSystem && category.defaultFor === 'transaction')?._id || '',
+        category: '',
         description: '',
         type: 'income',
         isForecast: false,
       });
     } catch (error) {
-      console.error('Error saving operation:', error);
+      console.error('Error adding operation:', error);
     }
   };
 
-  const handleTabClick = (index) => {
-    setCurrentMonth(index);
+  const combinedOperations = [...transactions, ...forecasts];
+
+  const openModal = (operation) => {
+    setSelectedOperation(operation);
+    setIsModalOpen(true);
   };
 
-  const getMonthClassName = (index) => {
-    return `month-tab ${index === currentMonth ? 'active-month' : ''}`;
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setSelectedOperation(null);
   };
 
-  const filterOperationsByMonth = (operations) => {
-    return operations.filter(op => {
-      const date = new Date(op.date);
-      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-    });
+  const handleModalInputChange = (e) => {
+    const { name, value } = e.target;
+    setSelectedOperation({ ...selectedOperation, [name]: value });
   };
 
-  const calculateBalance = (combinedOperations) => {
-    let balance = 0;
-    let dailyBalances = Array.from({ length: getDaysInMonth(currentMonth, currentYear) }, () => 0);
-    combinedOperations.forEach(op => {
-      const date = new Date(op.date).getDate();
-      if (!op.isForecast || (op.isForecast && op.status === 'accepted')) {
-        const amount = op.type === 'expense' ? -op.amount : op.amount;
-        dailyBalances[date - 1] += amount;
+  const saveChanges = async () => {
+    try {
+      if (selectedOperation.isForecast) {
+        await axios.put(`http://localhost:5001/api/forecasts/${selectedOperation._id}`, selectedOperation);
+        setForecasts(forecasts.map(f => f._id === selectedOperation._id ? selectedOperation : f));
+      } else {
+        await axios.put(`http://localhost:5001/api/transactions/${selectedOperation._id}`, selectedOperation);
+        setTransactions(transactions.map(t => t._id === selectedOperation._id ? selectedOperation : t));
       }
-    });
-    for (let i = 0; i < dailyBalances.length; i++) {
-      balance += dailyBalances[i];
-      dailyBalances[i] = balance;
+      closeModal();
+    } catch (error) {
+      console.error('Error saving changes:', error);
     }
-    return dailyBalances;
   };
 
-  const combinedOperations = filterOperationsByMonth([...transactions, ...forecasts]);
-  const dailyBalances = calculateBalance(combinedOperations);
+  const deleteOperation = async () => {
+    try {
+      if (selectedOperation.isForecast) {
+        await axios.delete(`http://localhost:5001/api/forecasts/${selectedOperation._id}`);
+        setForecasts(forecasts.filter(f => f._id !== selectedOperation._id));
+      } else {
+        await axios.delete(`http://localhost:5001/api/transactions/${selectedOperation._id}`);
+        setTransactions(transactions.filter(t => t._id !== selectedOperation._id));
+      }
+      closeModal();
+    } catch (error) {
+      console.error('Error deleting operation:', error);
+    }
+  };
+
+  const acceptForecast = async () => {
+    try {
+      await axios.put(`http://localhost:5001/api/forecasts/${selectedOperation._id}/accept`);
+      setForecasts(forecasts.filter(f => f._id !== selectedOperation._id));
+      closeModal();
+    } catch (error) {
+      console.error('Error accepting forecast:', error);
+    }
+  };
 
   return (
     <div>
-      <h1>Dashboard</h1>
-      <div>
-        {months.map((month, index) => (
-          <button
-            key={index}
-            onClick={() => handleTabClick(index)}
-            className={getMonthClassName(index)}
-          >
-            {month}
-          </button>
-        ))}
-      </div>
-      <form onSubmit={handleSubmit}>
-        <input
-          type="date"
-          name="date"
-          value={newOperation.date}
-          onChange={handleInputChange}
-          placeholder="Date"
-          required
-        />
-        <input
-          type="number"
-          name="amount"
-          value={newOperation.amount}
-          onChange={handleInputChange}
-          placeholder="Amount"
-          required
-        />
-        <select
-          name="category"
-          value={newOperation.category}
-          onChange={handleInputChange}
-          placeholder="Category"
-          required
-        >
-          <option value="">Select Category</option>
-          {categories.map((category) => (
-            <option key={category._id} value={category._id}>
-              {category.name}
-            </option>
+      <h1>Дэшборд</h1>
+      <form onSubmit={addOperation}>
+        <input type="date" name="date" value={newOperation.date} onChange={handleInputChange} required />
+        <input type="number" name="amount" value={newOperation.amount} onChange={handleInputChange} required />
+        <select name="category" value={newOperation.category} onChange={handleInputChange} required>
+          {categories.map(category => (
+            <option key={category._id} value={category._id}>{category.name}</option>
           ))}
         </select>
-        <input
-          type="text"
-          name="description"
-          value={newOperation.description}
-          onChange={handleInputChange}
-          placeholder="Description"
-        />
-        <select
-          name="type"
-          value={newOperation.type}
-          onChange={handleInputChange}
-          placeholder="Type"
-        >
-          <option value="income">Income</option>
-          <option value="expense">Expense</option>
+        <input type="text" name="description" value={newOperation.description} onChange={handleInputChange} />
+        <select name="type" value={newOperation.type} onChange={handleInputChange} required>
+          <option value="income">Доход</option>
+          <option value="expense">Расход</option>
         </select>
-        <label>
-          <input
-            type="checkbox"
-            name="isForecast"
-            checked={newOperation.isForecast}
-            onChange={(e) => handleInputChange({ target: { name: 'isForecast', value: e.target.checked } })}
-          />
-          Is Forecast
-        </label>
-        <button type="submit">Add Operation</button>
+        <button type="submit">Добавить операцию</button>
       </form>
       <h2>Операции</h2>
       <table>
@@ -227,7 +183,7 @@ const Dashboard = () => {
             {Array.from({ length: getDaysInMonth(currentMonth, currentYear) }, (_, i) => (
               <td key={i}>
                 {combinedOperations.filter(op => new Date(op.date).getDate() === i + 1 && op.type === 'income').map(op => (
-                  <div key={op._id}>
+                  <div key={op._id} onClick={() => openModal(op)}>
                     {op.amount} {categories.find(category => category._id === op.category)?.name || 'Unknown'} {op.isForecast && '(Прогноз)'}
                   </div>
                 ))}
@@ -238,7 +194,7 @@ const Dashboard = () => {
             {Array.from({ length: getDaysInMonth(currentMonth, currentYear) }, (_, i) => (
               <td key={i}>
                 {combinedOperations.filter(op => new Date(op.date).getDate() === i + 1 && op.type === 'expense').map(op => (
-                  <div key={op._id}>
+                  <div key={op._id} onClick={() => openModal(op)}>
                     -{op.amount} {categories.find(category => category._id === op.category)?.name || 'Unknown'} {op.isForecast && '(Прогноз)'}
                   </div>
                 ))}
@@ -248,12 +204,45 @@ const Dashboard = () => {
           <tr>
             {Array.from({ length: getDaysInMonth(currentMonth, currentYear) }, (_, i) => (
               <td key={i}>
-                {dailyBalances[i]}
+                {combinedOperations.filter(op => new Date(op.date).getDate() === i + 1 && op.type === 'income').map(op => (
+                  <div key={op._id} onClick={() => openModal(op)}>
+                    {op.amount} {categories.find(category => category._id === op.category)?.name || 'Unknown'} {op.isForecast && '(Прогноз)'}
+                  </div>
+                ))}
               </td>
             ))}
           </tr>
         </tbody>
       </table>
+      <Modal
+        isOpen={isModalOpen}
+        onRequestClose={closeModal}
+        contentLabel="Редактировать операцию"
+      >
+        {selectedOperation && (
+          <div>
+            <h2>Редактировать операцию</h2>
+            <input type="date" name="date" value={selectedOperation.date} onChange={handleModalInputChange} required />
+            <input type="number" name="amount" value={selectedOperation.amount} onChange={handleModalInputChange} required />
+            <select name="category" value={selectedOperation.category} onChange={handleModalInputChange} required>
+              {categories.map(category => (
+                <option key={category._id} value={category._id}>{category.name}</option>
+              ))}
+            </select>
+            <input type="text" name="description" value={selectedOperation.description} onChange={handleModalInputChange} />
+            <select name="type" value={selectedOperation.type} onChange={handleModalInputChange} required>
+              <option value="income">Доход</option>
+              <option value="expense">Расход</option>
+            </select>
+            <button onClick={saveChanges}>Сохранить</button>
+            <button onClick={deleteOperation}>Удалить</button>
+            {selectedOperation.isForecast && (
+              <button onClick={acceptForecast}>Принять</button>
+            )}
+            <button onClick={closeModal}>Закрыть</button>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
