@@ -1,8 +1,10 @@
-// backend/middleware/admin.js
 module.exports = function (req, res, next) {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ msg: 'Access denied' });
+    console.log('User in admin middleware:', req.user); // Добавьте вывод данных пользователя
+    if (req.user && req.user.role === 'admin') {
+      next();
+    } else {
+      console.log('Access denied:', req.user); // Добавьте логирование причины отказа
+      res.status(403).json({ msg: 'Access denied, admin only' });
     }
-    next();
   };
   

@@ -1,59 +1,55 @@
-// Forecasts.js
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import React, { useCallback, useMemo } from 'react';
 import ForecastForm from '../components/ForecastForm';
+import Notification from '../components/Notification';
+import useForecasts from '../hooks/useForecasts';
 
 const Forecasts = () => {
-  const [forecasts, setForecasts] = useState([]);
-  const [editingForecast, setEditingForecast] = useState(null);
+  const {
+    operations: forecasts,
+    editingOperation: editingForecast,
+    setEditingOperation: setEditingForecast,
+    handleOperationAdded: handleForecastAdded,
+    handleDelete,
+    handleAccept,
+    notification,
+    closeNotification,
+    categories
+  } = useForecasts();
 
-  useEffect(() => {
-    const fetchForecasts = async () => {
-      try {
-        const response = await axios.get('http://localhost:5001/api/forecasts');
-        setForecasts(response.data);
-      } catch (error) {
-        console.error('Error fetching forecasts:', error);
-      }
-    };
+  const getCategoryName = useCallback((categoryId) => {
+    const category = categories.find(category => category._id === categoryId);
+    return category ? category.name : 'Unknown';
+  }, [categories]);
 
-    fetchForecasts();
-  }, []);
-
-  const handleForecastAdded = (newForecast, isEditing) => {
-    if (isEditing) {
-      setForecasts(forecasts.map(f => f._id === newForecast._id ? newForecast : f));
-    } else {
-      setForecasts([...forecasts, newForecast]);
-    }
-  };
-
-  const handleEdit = (forecast) => {
-    setEditingForecast(forecast);
-  };
-
-  const handleDelete = async (id) => {
-    try {
-      await axios.delete(`http://localhost:5001/api/forecasts/${id}`);
-      setForecasts(forecasts.filter(forecast => forecast._id !== id));
-    } catch (error) {
-      console.error('Error deleting forecast:', error);
-    }
-  };
-
-  const handleAccept = async (id) => {
-    try {
-      await axios.post(`http://localhost:5001/api/forecasts/${id}/accept`);
-      setForecasts(forecasts.map(forecast => forecast._id === id ? { ...forecast, status: 'accepted' } : forecast));
-    } catch (error) {
-      console.error('Error accepting forecast:', error);
-    }
-  };
+  const memoizedForecasts = useMemo(() => (
+    forecasts.map((forecast) => (
+      <tr key={forecast._id}>
+        <td>{new Date(forecast.date).toLocaleDateString()}</td>
+        <td>{forecast.amount}</td>
+        <td>{getCategoryName(forecast.category)}</td>
+        <td>{forecast.description}</td>
+        <td>{forecast.type}</td>
+        <td>{forecast.status}</td>
+        <td>
+          <button onClick={() => setEditingForecast(forecast)}>Edit</button>
+          <button onClick={() => handleDelete(forecast._id)}>Delete</button>
+          {forecast.status === 'pending' && (
+            <button onClick={() => handleAccept(forecast._id)}>Accept</button>
+          )}
+        </td>
+      </tr>
+    ))
+  ), [forecasts, getCategoryName, handleDelete, handleAccept, setEditingForecast]);
 
   return (
     <div>
       <h1>Forecasts</h1>
-      <ForecastForm onForecastAdded={handleForecastAdded} editingForecast={editingForecast} setEditingForecast={setEditingForecast} />
+      <ForecastForm
+        onForecastAdded={handleForecastAdded}
+        editingForecast={editingForecast}
+        setEditingForecast={setEditingForecast}
+        categories={categories}
+      />
       <table>
         <thead>
           <tr>
@@ -67,25 +63,14 @@ const Forecasts = () => {
           </tr>
         </thead>
         <tbody>
-          {forecasts.map((forecast) => (
-            <tr key={forecast._id}>
-              <td>{new Date(forecast.date).toLocaleDateString()}</td>
-              <td>{forecast.amount}</td>
-              <td>{forecast.category}</td>
-              <td>{forecast.description}</td>
-              <td>{forecast.type}</td>
-              <td>{forecast.status}</td>
-              <td>
-                <button onClick={() => handleEdit(forecast)}>Edit</button>
-                <button onClick={() => handleDelete(forecast._id)}>Delete</button>
-                {forecast.status === 'pending' && (
-                  <button onClick={() => handleAccept(forecast._id)}>Accept</button>
-                )}
-              </td>
-            </tr>
-          ))}
+          {memoizedForecasts}
         </tbody>
       </table>
+      <Notification
+        message={notification?.message}
+        type={notification?.type}
+        onClose={closeNotification}
+      />
     </div>
   );
 };

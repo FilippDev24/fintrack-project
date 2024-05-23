@@ -1,16 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
+import { AuthContext } from '../context/authContext';
 
 const Users = () => {
   const [users, setUsers] = useState([]);
   const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'user' });
+  const { user } = useContext(AuthContext);
 
   useEffect(() => {
     const fetchUsers = async () => {
-      const res = await axios.get('http://localhost:5001/api/users', {
-        headers: { 'x-auth-token': localStorage.getItem('token') },
-      });
-      setUsers(res.data);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found, please log in');
+        return;
+      }
+
+      try {
+        const res = await axios.get('http://localhost:5001/api/users', {
+          headers: { 'x-auth-token': token },
+        });
+        setUsers(res.data);
+      } catch (err) {
+        console.error(err.response.data);
+      }
     };
     fetchUsers();
   }, []);
@@ -21,14 +33,20 @@ const Users = () => {
 
   const onSubmit = async e => {
     e.preventDefault();
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('No token found, please log in');
+      return;
+    }
+
     try {
       await axios.post('http://localhost:5001/api/users', formData, {
-        headers: { 'x-auth-token': localStorage.getItem('token') },
+        headers: { 'x-auth-token': token },
       });
       setFormData({ name: '', email: '', password: '', role: 'user' });
       // Обновление списка пользователей после создания нового
       const res = await axios.get('http://localhost:5001/api/users', {
-        headers: { 'x-auth-token': localStorage.getItem('token') },
+        headers: { 'x-auth-token': token },
       });
       setUsers(res.data);
     } catch (err) {

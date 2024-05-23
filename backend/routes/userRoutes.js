@@ -1,28 +1,22 @@
 const express = require('express');
 const router = express.Router();
-const { check } = require('express-validator');
-const { getUsers, createUser, loginUser, register, login, getProfile } = require('../controllers/userController');
+const { loginUser, register, getProfile, getUsers, createUser } = require('../controllers/userController');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 
-router.get('/', auth, admin, getUsers);
-router.post('/', auth, admin, createUser);
+// Route for user login
+router.post('/auth/login', loginUser);
 
-router.post(
-  '/login',
-  [
-    check('email', 'Please include a valid email').isEmail(),
-    check('password', 'Password is required').exists(),
-  ],
-  (req, res, next) => {
-    console.log('Login route hit');
-    next();
-  },
-  loginUser
-);
+// Route for user registration
+router.post('/auth/register', register);
 
-router.post('/register', register);
-router.post('/login', login);
+// Protected route to get user profile
 router.get('/profile', auth, getProfile);
+
+// Protected and admin route to get all users
+router.get('/', auth, admin, getUsers);
+
+// Protected and admin route to create a new user
+router.post('/', auth, admin, createUser);
 
 module.exports = router;

@@ -1,31 +1,20 @@
-// src/pages/Login.js
-import React, { useState, useContext, useEffect } from 'react';
-import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useContext } from 'react';
 import { AuthContext } from '../context/authContext';
 
 const Login = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
-  const { email, password } = formData;
-  const navigate = useNavigate();
-  const { isAuthenticated, login } = useContext(AuthContext);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/dashboard');
-    }
-  }, [isAuthenticated, navigate]);
+  const [error, setError] = useState(null);
+  const { login } = useContext(AuthContext);
 
   const onChange = e => setFormData({ ...formData, [e.target.name]: e.target.value });
 
   const onSubmit = async e => {
     e.preventDefault();
     try {
-      const res = await axios.post('http://localhost:5001/api/users/login', formData); // Обновленный URL
-      login(res.data.token);
-      navigate('/dashboard');
+      await login(formData.email, formData.password);
     } catch (err) {
-      console.error(err.response ? err.response.data : 'Error', err);
+      setError('Login failed. Please check your credentials.');
+      console.error('Login failed', err);
     }
   };
 
@@ -33,12 +22,13 @@ const Login = () => {
     <form onSubmit={onSubmit}>
       <div>
         <label>Email</label>
-        <input type="email" name="email" value={email} onChange={onChange} required />
+        <input type="email" name="email" value={formData.email} onChange={onChange} required />
       </div>
       <div>
         <label>Password</label>
-        <input type="password" name="password" value={password} onChange={onChange} required />
+        <input type="password" name="password" value={formData.password} onChange={onChange} required />
       </div>
+      {error && <div>{error}</div>}
       <button type="submit">Login</button>
     </form>
   );

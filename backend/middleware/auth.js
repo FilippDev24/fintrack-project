@@ -1,5 +1,5 @@
-// auth.js
 const jwt = require('jsonwebtoken');
+const secret = process.env.JWT_SECRET || 'your_jwt_secret_key';
 
 module.exports = function (req, res, next) {
   const token = req.header('x-auth-token');
@@ -9,9 +9,9 @@ module.exports = function (req, res, next) {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, secret);
     req.user = decoded.user;
-    console.log('Decoded user:', req.user); // Логируем пользователя из токена
+    console.log('Decoded user:', req.user); // Добавьте вывод данных пользователя
     next();
   } catch (err) {
     res.status(401).json({ msg: 'Token is not valid' });

@@ -1,8 +1,13 @@
 import React from 'react';
 
-const MonthSwitcher = React.memo(({ currentMonth, currentYear, months, handleMonthChange }) => {
+const MonthSwitcher = ({ currentMonth, currentYear, months, handleMonthChange, handleYearChange }) => {
   return (
     <div>
+      <select value={currentYear} onChange={(e) => handleYearChange(parseInt(e.target.value, 10))}>
+        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(year => (
+          <option key={year} value={year}>{year}</option>
+        ))}
+      </select>
       {months.map((month, index) => (
         <button
           key={index}
@@ -19,6 +24,6 @@ const MonthSwitcher = React.memo(({ currentMonth, currentYear, months, handleMon
       ))}
     </div>
   );
-});
+};
 
 export default MonthSwitcher;

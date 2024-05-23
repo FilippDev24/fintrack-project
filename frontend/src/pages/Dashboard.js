@@ -5,7 +5,7 @@ import NewOperationForm from '../components/NewOperationForm';
 import MonthSwitcher from '../components/MonthSwitcher';
 import OperationModal from '../components/OperationModal';
 import Notification from '../components/Notification';
-import useOperations from '../hooks/useOperations';
+import useDashboardOperations from '../hooks/useDashboardOperations';
 
 // Настройка модального окна
 Modal.setAppElement('#root');
@@ -21,53 +21,47 @@ const getDaysInMonth = (month, year) => {
 
 const Dashboard = () => {
   const {
-    state,
-    openModal,
-    closeModal,
-    handleModalInputChange,
-    saveChanges,
-    deleteOperation,
-    acceptForecast,
-    addOperation,
-    handleMonthChange,
-    closeNotification
-  } = useOperations();
+    transactions,
+    forecasts,
+    handleAcceptForecast
+  } = useDashboardOperations();
 
-  const daysInMonth = getDaysInMonth(state.currentMonth, state.currentYear);
+  const daysInMonth = getDaysInMonth(transactions.currentMonth, transactions.currentYear);
 
   return (
     <div>
       <h1>Dashboard</h1>
       <MonthSwitcher
-        currentMonth={state.currentMonth}
-        currentYear={state.currentYear}
+        currentMonth={transactions.currentMonth}
+        currentYear={transactions.currentYear}
         months={months}
-        handleMonthChange={handleMonthChange}
+        handleMonthChange={transactions.handleMonthChange}
+        handleYearChange={transactions.handleYearChange}
       />
-      <NewOperationForm categories={state.categories} addOperation={addOperation} />
+      <NewOperationForm categories={transactions.categories} addOperation={transactions.handleOperationAdded} />
       <Calendar
-        currentMonth={state.currentMonth}
-        currentYear={state.currentYear}
+        currentMonth={transactions.currentMonth}
+        currentYear={transactions.currentYear}
         daysInMonth={daysInMonth}
-        transactions={state.transactions}
-        forecasts={state.forecasts}
-        categories={state.categories}
-        openModal={openModal}
+        transactions={transactions.operations}
+        forecasts={forecasts.operations}
+        categories={transactions.categories}
+        openModal={transactions.openModal}
       />
       <OperationModal
-        isModalOpen={state.isModalOpen}
-        selectedOperation={state.selectedOperation}
-        categories={state.categories}
-        handleModalInputChange={handleModalInputChange}
-        saveChanges={saveChanges}
-        deleteOperation={deleteOperation}
-        acceptForecast={acceptForecast}
-        closeModal={closeModal}
+        isModalOpen={transactions.isModalOpen}
+        selectedOperation={transactions.selectedOperation}
+        categories={transactions.categories}
+        handleModalInputChange={transactions.handleModalInputChange}
+        saveChanges={transactions.saveChanges}
+        deleteOperation={transactions.handleDelete}
+        acceptForecast={handleAcceptForecast}
+        closeModal={transactions.closeModal}
       />
       <Notification
-        message={state.notification?.message}
-        type={state.notification?.type}
-        onClose={closeNotification}
+        message={transactions.notification?.message || forecasts.notification?.message}
+        type={transactions.notification?.type || forecasts.notification?.type}
+        onClose={transactions.closeNotification || forecasts.closeNotification}
       />
     </div>
   );

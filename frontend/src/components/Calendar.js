@@ -1,6 +1,11 @@
 import React from 'react';
 
-const Calendar = ({ currentMonth, currentYear, daysInMonth, transactions, forecasts, categories, openModal }) => {
+const Calendar = React.memo(({ currentMonth, currentYear, daysInMonth, transactions, forecasts, categories, openModal }) => {
+  const getCategoryName = (categoryId) => {
+    const category = categories.find(category => category._id === categoryId);
+    return category ? category.name : 'Unknown';
+  };
+
   const getOperationsForDay = (day) => {
     const operations = [
       ...transactions.filter(op => {
@@ -30,7 +35,7 @@ const Calendar = ({ currentMonth, currentYear, daysInMonth, transactions, foreca
             <td key={i}>
               {getOperationsForDay(i + 1).map(op => (
                 <div key={op._id} onClick={() => openModal(op)}>
-                  {op.type === 'income' ? '+' : '-'}{op.amount} {categories.find(category => category._id === op.category)?.name || 'Unknown'} {op.isForecast && '(Прогноз)'}
+                  {op.type === 'income' ? '+' : '-'}{op.amount} {getCategoryName(op.category)} {op.isForecast && '(Прогноз)'}
                 </div>
               ))}
             </td>
@@ -39,6 +44,6 @@ const Calendar = ({ currentMonth, currentYear, daysInMonth, transactions, foreca
       </tbody>
     </table>
   );
-};
+});
 
 export default Calendar;
