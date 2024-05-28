@@ -20,6 +20,7 @@ const getDaysInMonth = (month, year) => {
 };
 
 const Dashboard = () => {
+  
   const {
     transactions,
     forecasts,

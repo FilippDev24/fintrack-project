@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { AuthContext } from '../context/authContext';
 
 const Users = () => {
   const [users, setUsers] = useState([]);
   const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'user' });
-  const { user } = useContext(AuthContext);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -80,8 +78,8 @@ const Users = () => {
         <button type="submit">Create User</button>
       </form>
       <ul>
-        {users.map(user => (
-          <li key={user._id}>{user.name} ({user.email}) - {user.role}</li>
+        {users.map(u => (
+          <li key={u._id}>{u.name} ({u.email}) - {u.role}</li>
         ))}
       </ul>
     </div>

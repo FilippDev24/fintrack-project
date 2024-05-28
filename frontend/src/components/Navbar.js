@@ -1,10 +1,9 @@
-// src/components/Navbar.js
 import React, { useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/authContext';
 
 const Navbar = () => {
-  const { isAuthenticated, userRole, logout } = useContext(AuthContext);
+  const { isAuthenticated, userRole, user, logout } = useContext(AuthContext);
 
   const handleLogout = () => {
     logout();
@@ -35,6 +34,9 @@ const Navbar = () => {
             )}
             <li>
               <Link to="/reports">Reports</Link>
+            </li>
+            <li>
+              <span>Welcome, {user?.email}</span>
             </li>
             <li>
               <button onClick={handleLogout}>Logout</button>
