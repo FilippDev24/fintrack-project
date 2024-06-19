@@ -1,19 +1,25 @@
 const jwt = require('jsonwebtoken');
-const secret = process.env.JWT_SECRET || 'your_jwt_secret_key';
+require('dotenv').config();
 
-module.exports = function (req, res, next) {
-  const token = req.header('x-auth-token');
+function auth(req, res, next) {
+  const authHeader = req.header('Authorization');
 
-  if (!token) {
-    return res.status(401).json({ msg: 'No token, authorization denied' });
-  }
+  // Check for token in Authorization header
+  if (!authHeader) return res.status(401).json({ msg: 'No token, authorization denied' });
+
+  const token = authHeader.split(' ')[1]; // Extract the token from the Bearer scheme
+  console.log('Token:', token); // Логирование токена
 
   try {
-    const decoded = jwt.verify(token, secret);
-    req.user = decoded.user;
-    console.log('Decoded user:', req.user); // Добавьте вывод данных пользователя
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Add user from payload
+    req.user = decoded;
+    console.log('Decoded:', decoded); // Логирование декодированного токена
     next();
-  } catch (err) {
-    res.status(401).json({ msg: 'Token is not valid' });
+  } catch (e) {
+    res.status(400).json({ msg: 'Token is not valid' });
   }
-};
+}
+
+module.exports = auth;

@@ -15,7 +15,7 @@ const Users = () => {
 
       try {
         const res = await axios.get('http://localhost:5001/api/users', {
-          headers: { 'x-auth-token': token },
+          headers: { 'Authorization': `Bearer ${token}` },
         });
         setUsers(res.data);
       } catch (err) {
@@ -39,12 +39,12 @@ const Users = () => {
 
     try {
       await axios.post('http://localhost:5001/api/users', formData, {
-        headers: { 'x-auth-token': token },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
       setFormData({ name: '', email: '', password: '', role: 'user' });
       // Обновление списка пользователей после создания нового
       const res = await axios.get('http://localhost:5001/api/users', {
-        headers: { 'x-auth-token': token },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
       setUsers(res.data);
     } catch (err) {

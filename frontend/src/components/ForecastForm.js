@@ -1,32 +1,35 @@
-// ForecastForm.js
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
-const ForecastForm = ({ onForecastAdded, editingForecast, setEditingForecast }) => {
-  const [categories, setCategories] = useState([]);
-  const [forecast, setForecast] = useState({
+const ForecastForm = ({ onForecastAdded, editingForecast, setEditingForecast, categories }) => {
+  const [formData, setFormData] = useState({
     date: '',
     amount: '',
     category: '',
     description: '',
-    type: 'expense',
+    type: 'income',
+    status: 'pending',
   });
+
+  const [availableCategories, setAvailableCategories] = useState([]);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchCategories = async () => {
-      try {
-        const response = await axios.get('http://localhost:5001/api/categories');
-        setCategories(response.data);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found, please log in');
+        return;
+      }
 
-        const defaultCategory = response.data.find(category => category.isSystem && category.defaultFor === 'forecast');
-        if (defaultCategory) {
-          setForecast(prevForecast => ({
-            ...prevForecast,
-            category: defaultCategory._id,
-          }));
-        }
+      try {
+        const response = await axios.get('http://localhost:5001/api/categories', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        setAvailableCategories(response.data);
       } catch (error) {
         console.error('Error fetching categories:', error);
+        setError('Error fetching categories');
       }
     };
 
@@ -35,94 +38,109 @@ const ForecastForm = ({ onForecastAdded, editingForecast, setEditingForecast }) 
 
   useEffect(() => {
     if (editingForecast) {
-      const formattedDate = new Date(editingForecast.date).toISOString().split('T')[0];
-      setForecast({
-        ...editingForecast,
-        date: formattedDate,
+      setFormData({
+        date: editingForecast.date.split('T')[0],
+        amount: editingForecast.amount,
+        category: editingForecast.category,
+        description: editingForecast.description,
+        type: editingForecast.type,
+        status: editingForecast.status,
       });
     }
   }, [editingForecast]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setForecast({
-      ...forecast,
+    setFormData({
+      ...formData,
       [name]: value,
     });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('No token found, please log in');
+      return;
+    }
 
     try {
-      const response = editingForecast
-        ? await axios.put(`http://localhost:5001/api/forecasts/${editingForecast._id}`, forecast)
-        : await axios.post('http://localhost:5001/api/forecasts', forecast);
-
-      onForecastAdded(response.data, editingForecast);
-      setForecast({
+      if (editingForecast) {
+        await axios.put(`http://localhost:5001/api/forecasts/${editingForecast._id}`, formData, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        setEditingForecast(null);
+      } else {
+        await axios.post('http://localhost:5001/api/forecasts', formData, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+      }
+      onForecastAdded();
+      setFormData({
         date: '',
         amount: '',
-        category: categories.find(category => category.isSystem && category.defaultFor === 'forecast')?._id || '',
+        category: '',
         description: '',
-        type: 'expense',
+        type: 'income',
+        status: 'pending',
       });
-      setEditingForecast(null);
     } catch (error) {
       console.error('Error saving forecast:', error);
+      setError('Error saving forecast');
     }
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <input
-        type="date"
-        name="date"
-        value={forecast.date}
-        onChange={handleInputChange}
-        placeholder="Date"
-        required
-      />
-      <input
-        type="number"
-        name="amount"
-        value={forecast.amount}
-        onChange={handleInputChange}
-        placeholder="Amount"
-        required
-      />
-      <select
-        name="category"
-        value={forecast.category}
-        onChange={handleInputChange}
-        placeholder="Category"
-        required
-      >
-        <option value="">Select Category</option>
-        {categories.map((category) => (
-          <option key={category._id} value={category._id}>
-            {category.name}
-          </option>
-        ))}
-      </select>
-      <input
-        type="text"
-        name="description"
-        value={forecast.description}
-        onChange={handleInputChange}
-        placeholder="Description"
-      />
-      <select
-        name="type"
-        value={forecast.type}
-        onChange={handleInputChange}
-        placeholder="Type"
-      >
-        <option value="income">Income</option>
-        <option value="expense">Expense</option>
-      </select>
-      <button type="submit">{editingForecast ? 'Update Forecast' : 'Add Forecast'}</button>
-    </form>
+    <div>
+      <h2>{editingForecast ? 'Edit Forecast' : 'Add Forecast'}</h2>
+      <form onSubmit={handleSubmit}>
+        <input
+          type="date"
+          name="date"
+          value={formData.date}
+          onChange={handleInputChange}
+          required
+        />
+        <input
+          type="number"
+          name="amount"
+          value={formData.amount}
+          onChange={handleInputChange}
+          required
+        />
+        <select
+          name="category"
+          value={formData.category}
+          onChange={handleInputChange}
+          required
+        >
+          <option value="" disabled>Select Category</option>
+          {availableCategories.map((category) => (
+            <option key={category._id} value={category._id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          name="description"
+          value={formData.description}
+          onChange={handleInputChange}
+        />
+        <select
+          name="type"
+          value={formData.type}
+          onChange={handleInputChange}
+          required
+        >
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+        </select>
+        <button type="submit">{editingForecast ? 'Update Forecast' : 'Add Forecast'}</button>
+        {error && <div>{error}</div>}
+      </form>
+    </div>
   );
 };
 

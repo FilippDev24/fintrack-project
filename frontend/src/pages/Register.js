@@ -1,4 +1,3 @@
-// src/pages/Register.js
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
@@ -14,7 +13,9 @@ const Register = () => {
     e.preventDefault();
     try {
       const res = await axios.post('/api/users/register', formData);
-      localStorage.setItem('token', res.data.token);
+      const { token, user } = res.data;
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
       navigate('/');
     } catch (err) {
       console.error(err.response.data);

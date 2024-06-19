@@ -1,10 +1,8 @@
-// TransactionForm.js
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
-const TransactionForm = ({ onTransactionAdded, editingTransaction, setEditingTransaction }) => {
-  const [categories, setCategories] = useState([]);
-  const [transaction, setTransaction] = useState({
+const TransactionForm = ({ onTransactionAdded, editingTransaction, setEditingTransaction, categories }) => {
+  const [formData, setFormData] = useState({
     date: '',
     amount: '',
     category: '',
@@ -12,21 +10,25 @@ const TransactionForm = ({ onTransactionAdded, editingTransaction, setEditingTra
     type: 'expense',
   });
 
+  const [availableCategories, setAvailableCategories] = useState([]);
+  const [error, setError] = useState(null);
+
   useEffect(() => {
     const fetchCategories = async () => {
-      try {
-        const response = await axios.get('http://localhost:5001/api/categories');
-        setCategories(response.data);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found, please log in');
+        return;
+      }
 
-        const defaultCategory = response.data.find(category => category.isSystem && category.defaultFor === 'transaction');
-        if (defaultCategory) {
-          setTransaction(prevTransaction => ({
-            ...prevTransaction,
-            category: defaultCategory._id,
-          }));
-        }
+      try {
+        const response = await axios.get('http://localhost:5001/api/categories', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        setAvailableCategories(response.data);
       } catch (error) {
         console.error('Error fetching categories:', error);
+        setError('Error fetching categories');
       }
     };
 
@@ -35,94 +37,107 @@ const TransactionForm = ({ onTransactionAdded, editingTransaction, setEditingTra
 
   useEffect(() => {
     if (editingTransaction) {
-      const formattedDate = new Date(editingTransaction.date).toISOString().split('T')[0];
-      setTransaction({
-        ...editingTransaction,
-        date: formattedDate,
+      setFormData({
+        date: editingTransaction.date.split('T')[0],
+        amount: editingTransaction.amount,
+        category: editingTransaction.category,
+        description: editingTransaction.description,
+        type: editingTransaction.type,
       });
     }
   }, [editingTransaction]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setTransaction({
-      ...transaction,
+    setFormData({
+      ...formData,
       [name]: value,
     });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('No token found, please log in');
+      return;
+    }
 
     try {
-      const response = editingTransaction
-        ? await axios.put(`http://localhost:5001/api/transactions/${editingTransaction._id}`, transaction)
-        : await axios.post('http://localhost:5001/api/transactions', transaction);
-
-      onTransactionAdded(response.data, editingTransaction);
-      setTransaction({
+      if (editingTransaction) {
+        await axios.put(`http://localhost:5001/api/transactions/${editingTransaction._id}`, formData, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        setEditingTransaction(null);
+      } else {
+        await axios.post('http://localhost:5001/api/transactions', formData, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+      }
+      onTransactionAdded();
+      setFormData({
         date: '',
         amount: '',
-        category: categories.find(category => category.isSystem && category.defaultFor === 'transaction')?._id || '',
+        category: '',
         description: '',
         type: 'expense',
       });
-      setEditingTransaction(null);
     } catch (error) {
       console.error('Error saving transaction:', error);
+      setError('Error saving transaction');
     }
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <input
-        type="date"
-        name="date"
-        value={transaction.date}
-        onChange={handleInputChange}
-        placeholder="Date"
-        required
-      />
-      <input
-        type="number"
-        name="amount"
-        value={transaction.amount}
-        onChange={handleInputChange}
-        placeholder="Amount"
-        required
-      />
-      <select
-        name="category"
-        value={transaction.category}
-        onChange={handleInputChange}
-        placeholder="Category"
-        required
-      >
-        <option value="">Select Category</option>
-        {categories.map((category) => (
-          <option key={category._id} value={category._id}>
-            {category.name}
-          </option>
-        ))}
-      </select>
-      <input
-        type="text"
-        name="description"
-        value={transaction.description}
-        onChange={handleInputChange}
-        placeholder="Description"
-      />
-      <select
-        name="type"
-        value={transaction.type}
-        onChange={handleInputChange}
-        placeholder="Type"
-      >
-        <option value="income">Income</option>
-        <option value="expense">Expense</option>
-      </select>
-      <button type="submit">{editingTransaction ? 'Update Transaction' : 'Add Transaction'}</button>
-    </form>
+    <div>
+      <h2>{editingTransaction ? 'Edit Transaction' : 'Add Transaction'}</h2>
+      <form onSubmit={handleSubmit}>
+        <input
+          type="date"
+          name="date"
+          value={formData.date}
+          onChange={handleInputChange}
+          required
+        />
+        <input
+          type="number"
+          name="amount"
+          value={formData.amount}
+          onChange={handleInputChange}
+          required
+        />
+        <select
+          name="category"
+          value={formData.category}
+          onChange={handleInputChange}
+          required
+        >
+          <option value="" disabled>Select Category</option>
+          {availableCategories.map((category) => (
+            <option key={category._id} value={category._id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          name="description"
+          value={formData.description}
+          onChange={handleInputChange}
+        />
+        <select
+          name="type"
+          value={formData.type}
+          onChange={handleInputChange}
+          required
+        >
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+        </select>
+        <button type="submit">{editingTransaction ? 'Update Transaction' : 'Add Transaction'}</button>
+        {error && <div>{error}</div>}
+      </form>
+    </div>
   );
 };
 

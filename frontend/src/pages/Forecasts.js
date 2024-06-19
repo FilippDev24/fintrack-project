@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import ForecastForm from '../components/ForecastForm';
 import Notification from '../components/Notification';
 import useForecasts from '../hooks/useForecasts';
+import axios from 'axios';
 
 const Forecasts = () => {
   const {

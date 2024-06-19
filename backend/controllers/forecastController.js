@@ -5,7 +5,7 @@ const { handleError } = require('../utils/errorUtils');
 
 const getForecasts = async (req, res) => {
     try {
-        const forecasts = await Forecast.find();
+        const forecasts = await Forecast.find({ user: req.user.id });
         res.json(forecasts);
     } catch (error) {
         handleError(res, error);
@@ -28,7 +28,6 @@ const createForecast = async (req, res) => {
     const { date, amount, category, description, type } = req.body;
 
     try {
-        console.log('Creating forecast:', req.body); // Добавлено логирование
         let defaultCategory = null;
         if (!category) {
             defaultCategory = await Category.findOne({ isSystem: true, defaultFor: 'forecast' });
@@ -40,7 +39,8 @@ const createForecast = async (req, res) => {
             category: category || (defaultCategory ? defaultCategory._id : null),
             description: description || '',
             type,
-            status: 'pending' // Установка статуса
+            status: 'pending', // Установка статуса
+            user: req.user.id // Добавление пользователя
         });
 
         const newForecast = await forecast.save();
@@ -51,9 +51,9 @@ const createForecast = async (req, res) => {
 };
 
 const updateForecast = async (req, res) => {
+    const { date, amount, category, description, type } = req.body;
+
     try {
-        const { date, amount, category, description, type } = req.body;
-        
         let defaultCategory = null;
         if (!category) {
             defaultCategory = await Category.findOne({ isSystem: true, defaultFor: 'forecast' });
@@ -61,9 +61,14 @@ const updateForecast = async (req, res) => {
 
         const updatedForecast = await Forecast.findByIdAndUpdate(
             req.params.id,
-            { date, amount, category: category || (defaultCategory ? defaultCategory._id : null), description: description || '', type },
+            { date, amount, category: category || (defaultCategory ? defaultCategory._id : null), description, type },
             { new: true }
         );
+
+        if (!updatedForecast) {
+            return res.status(404).json({ message: 'Forecast not found' });
+        }
+
         res.json(updatedForecast);
     } catch (error) {
         handleError(res, error);
@@ -102,10 +107,11 @@ const acceptForecast = async (req, res) => {
             amount: forecast.amount,
             category: forecast.category,
             description: forecast.description,
-            type: forecast.type
+            type: forecast.type,
+            user: req.user.id // Добавление пользователя
         });
         await transaction.save();
-        res.json({ message: 'Forecast accepted and converted to transaction' });
+        res.json({ message: 'Forecast accepted and converted to transaction', transaction });
     } catch (error) {
         handleError(res, error);
     }
